@@ -220,6 +220,50 @@ object AngelSavedModelBundle {
     }
   }
 
+  def getLocalModel(path: StoragePath): LocalModel = {
+    // load
+    val graphJsonFile = s"$path${File.separator}graph.json"
+    val envCtx = LocalEnvContext()
+    LOG.info(s"the graph file is $graphJsonFile")
+
+    try {
+      assert(SystemFileUtils.fileExist(graphJsonFile))
+
+      val conf = new SharedConf
+      conf.set(MLCoreConf.ML_JSON_CONF_FILE, graphJsonFile)
+      JsonUtils.parseAndUpdateJson(graphJsonFile, conf, ModelServer.hadoopConf)
+      //println(JsonUtils.J2Pretty(conf.getJson))
+
+      LOG.info(s"model load path is $path ")
+
+      // update model load path
+      conf.set(MLCoreConf.ML_LOAD_MODEL_PATH, path)
+
+      val model = new LocalModel(conf)
+      LOG.info(s"buildNetwork for model")
+      model.buildNetwork()
+
+      model.createMatrices(envCtx)
+
+      LOG.info(s"start to load parameters for model")
+
+      model.loadModel(envCtx, path, ModelServer.hadoopConf)
+
+      LOG.info(s"model has loaded!")
+      return model
+    } catch {
+      case ase: AssertionError =>
+        LOG.info(s"the graph file $graphJsonFile is not exist.")
+        ase.printStackTrace()
+        System.exit(-1)
+        null.asInstanceOf[LocalModel]
+      case ex: Exception =>
+        ex.printStackTrace()
+        System.exit(-1)
+        null.asInstanceOf[LocalModel]
+    }
+  }
+
   def resourceEstimate(modelPath: String): ResourceAllocation = {
     if (modelPath != null) {
       if (SystemFileUtils.fileExist(modelPath)) {
